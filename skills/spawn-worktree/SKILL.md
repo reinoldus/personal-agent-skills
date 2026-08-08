@@ -17,7 +17,7 @@ Branch the work off into its own worktree and its own agent: name, create, attac
 
 ## Context
 
-How much context to hand over is the caller's call at invocation time, not fixed here. Default is self-contained but minimal: the repo, the worktree path, the branch, the task, the deliverable, and whether the agent may modify code. When the caller asks for more, write a short markdown brief into the new worktree and point the prompt at it. Never paste a raw transcript — the new agent inherits the old one's dead ends along with its findings.
+How much context to hand over is the caller's call at invocation time, not fixed here. Default is self-contained but minimal: the repo, the worktree path, the branch, the task, the deliverable, and whether the agent may modify code. Never paste a raw transcript — the new agent inherits the old one's dead ends along with its findings.
 
 ## Traps
 
