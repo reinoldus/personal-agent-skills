@@ -9,7 +9,7 @@ Branch the work off into its own worktree and its own agent: name, create, attac
 
 ## Steps
 
-1. **Agree the branch name.** Propose `<type>/<slug>` — `feat/add-retry`, `fix/flaky-test` — and include the issue number when one exists: `feat/123-add-retry`. Ask the user to confirm before creating anything. Done when the user has approved a name; never auto-create one.
+1. **Pick the branch name.** Derive `<type>/<slug>` from the task — `feat/add-retry`, `fix/flaky-test` — and include the issue number when one exists: `feat/123-add-retry`. Done when a name is chosen; no confirmation round-trip needed.
 2. **Create the worktree.** `wt switch --create <branch>`. worktrunk runs the project's configured pre-start hooks here — dependency install, per-worktree env files, port allocation — which is the whole reason to use `wt` instead of raw git. Done when the hooks have finished and the worktree path is captured — `wt list --format json` maps each `branch` to its `path`.
 3. **Attach a workspace.** `herdr workspace create --cwd <worktree-path> --label <branch> --no-focus`. A separate workspace, rather than a split of the current pane, is what lets herdr's `branch` sidebar token tell the new work apart from everything else. Done when the reply yields both the new `workspace_id` and its `pane_id`.
 4. **Start and hand off.** `herdr agent start <name> --kind claude --pane <pane_id>`, then `herdr agent prompt <name> "<task>" --wait --until working --timeout 15000`. See the `spawn-pane` skill for the start/prompt mechanics and their failure modes. Done when the reply is `agent_prompted` with `agent_status: working`.
@@ -22,7 +22,7 @@ How much context to hand over is the caller's call at invocation time, not fixed
 ## Traps
 
 - **Never use `herdr worktree create`.** It looks like the obvious shortcut and it is the wrong tool: it drives raw git and skips worktrunk's pre-start hooks entirely. In any project whose worktrees need setup — virtualenv, env files, installed dependencies, allocated ports — a herdr-created worktree is a broken worktree. `wt` creates; herdr only attaches.
-- **Confirm the name before creating.** Renaming a worktree after the fact means tearing it down and re-running every hook. A worktree name is expensive to change.
+- **Get the name right the first time.** Renaming a worktree after the fact means tearing it down and re-running every hook. A worktree name is expensive to change.
 - **`wt switch` only moves the shell that ran it.** A non-interactive invocation creates the worktree and runs the hooks, but leaves the calling agent where it was. Pass the captured path to `herdr workspace create --cwd` explicitly; never assume the agent's own cwd followed.
 - **Two id spaces.** `herdr agent …` subcommands target the agent *name*; `herdr pane …` and `herdr workspace …` subcommands target *ids*.
 - **Parse the JSON.** Every herdr command returns a structured reply — read the fields for the ids and the status instead of treating a zero exit code as success.
