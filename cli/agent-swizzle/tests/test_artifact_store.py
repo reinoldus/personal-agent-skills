@@ -3,6 +3,7 @@ import stat
 
 import boto3
 import pytest
+from botocore.exceptions import ClientError
 from click.testing import CliRunner
 from moto import mock_aws
 
@@ -212,3 +213,47 @@ def test_config_roundtrips_awkward_values_and_tightens_mode(env):
     assert cfg.load_section(PROJECT, "x") == values
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_put_key_ending_in_slash_appends_file_name(env):
+    configure()
+    src = env / "report.md"
+    src.write_text("hello")
+    assert run("put", str(src), "--key", "runs/").output.strip() == "runs/report.md"
+    assert run("ls").output.split() == ["runs/report.md"]
+
+
+def test_existence_check_denied_is_a_clean_error(env, monkeypatch):
+    from agent_swizzle import artifact_store
+
+    real_client = artifact_store._client
+
+    def denied(**_):
+        # What S3 returns for HEAD on a missing key when the access key lacks s3:ListBucket.
+        raise ClientError({"Error": {"Code": "403", "Message": "Forbidden"}}, "HeadObject")
+
+    def spy(conf):
+        client = real_client(conf)
+        client.meta.events.register("before-call.s3.HeadObject", denied)
+        return client
+
+    configure()
+    monkeypatch.setattr(artifact_store, "_client", spy)
+    src = env / "report.md"
+    src.write_text("hello")
+
+    result = run("put", str(src))
+    assert result.exit_code == 1 and "s3:ListBucket" in result.output and "--force" in result.output
+    assert run("put", str(src), "--force").exit_code == 0
+    result = run("url", "report.md")
+    assert result.exit_code == 1 and "s3:ListBucket" in result.output
+
+
+def test_missing_bucket_is_a_clean_error(env):
+    configure()
+    cfg.save_section(PROJECT, "artifact-store", {**cfg.load_section(PROJECT, "artifact-store"), "bucket": "nope"})
+    src = env / "report.md"
+    src.write_text("hello")
+    for args in (("ls",), ("put", str(src)), ("get", "report.md", str(env / "x.md"))):
+        result = run(*args)
+        assert result.exit_code == 1 and "Error:" in result.output, (args, result.output)

@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 import boto3
 import click
+from boto3.exceptions import S3UploadFailedError
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
 
@@ -74,13 +75,20 @@ def _relative_key(conf: StoreConfig, full_key: str) -> str:
     return full_key[len(prefix) + 1 :] if prefix and full_key.startswith(prefix + "/") else full_key
 
 
-def _exists(client, bucket: str, key: str) -> bool:
+def _exists(client, bucket: str, key: str, hint: str = "") -> bool:
     try:
         client.head_object(Bucket=bucket, Key=key)
         return True
     except ClientError as exc:
-        if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
+        code = exc.response.get("Error", {}).get("Code")
+        if code in ("404", "NoSuchKey", "NotFound"):
             return False
+        if code in ("403", "AccessDenied", "Forbidden"):
+            # Without s3:ListBucket, S3 answers HEAD on a missing key with 403 instead of 404.
+            raise click.ClickException(
+                f"Cannot check whether {key} exists: access denied. "
+                f"The access key needs list permission (s3:ListBucket) on the bucket.{hint}"
+            )
         raise
 
 
@@ -236,7 +244,7 @@ def status():
 
 @artifact_store.command()
 @click.argument("file", type=click.Path(exists=True, dir_okay=False, path_type=Path))
-@click.option("--key", help="Destination key. Defaults to the file name.")
+@click.option("--key", help='Destination key. Defaults to the file name; a key ending in "/" gets the file name appended.')
 @click.option("--force", is_flag=True, help="Overwrite an existing object.")
 @click.option("--url", "with_url", is_flag=True, help="Also print a presigned download URL.")
 @click.option("--expires", default=3600, show_default=True, type=MAX_EXPIRY, help="Presigned URL lifetime in seconds.")
@@ -244,10 +252,15 @@ def put(file, key, force, with_url, expires):
     """Upload FILE."""
     conf = _require_config()
     client = _client(conf)
-    full_key = _full_key(conf, key or file.name)
-    if not force and _exists(client, conf.bucket, full_key):
-        raise click.ClickException(f"{_relative_key(conf, full_key)} already exists. Pass --force to overwrite.")
-    client.upload_file(str(file), conf.bucket, full_key)
+    if not key or key.endswith("/"):
+        key = (key or "") + file.name
+    full_key = _full_key(conf, key)
+    try:
+        if not force and _exists(client, conf.bucket, full_key, hint=" Or pass --force to skip the check."):
+            raise click.ClickException(f"{_relative_key(conf, full_key)} already exists. Pass --force to overwrite.")
+        client.upload_file(str(file), conf.bucket, full_key)
+    except (ClientError, BotoCoreError, S3UploadFailedError) as exc:
+        raise click.ClickException(f"Upload of {file} failed: {exc}")
     click.echo(_relative_key(conf, full_key))
     if with_url:
         click.echo(_presign(client, conf, full_key, expires))
@@ -277,7 +290,7 @@ def get(key, dest, force):
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         client.download_file(conf.bucket, _full_key(conf, key), str(target))
-    except (ClientError, OSError) as exc:
+    except (ClientError, BotoCoreError, OSError) as exc:
         raise click.ClickException(f"Download of {key} failed: {exc}")
     click.echo(str(target))
 
@@ -290,13 +303,16 @@ def list_objects(prefix, long_format):
     conf = _require_config()
     client = _client(conf)
     paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=conf.bucket, Prefix=_full_key(conf, prefix)):
-        for obj in page.get("Contents", []):
-            rel = _relative_key(conf, obj["Key"])
-            if long_format:
-                click.echo(f"{obj['Size']:>12}  {obj['LastModified']:%Y-%m-%d %H:%M}  {rel}")
-            else:
-                click.echo(rel)
+    try:
+        for page in paginator.paginate(Bucket=conf.bucket, Prefix=_full_key(conf, prefix)):
+            for obj in page.get("Contents", []):
+                rel = _relative_key(conf, obj["Key"])
+                if long_format:
+                    click.echo(f"{obj['Size']:>12}  {obj['LastModified']:%Y-%m-%d %H:%M}  {rel}")
+                else:
+                    click.echo(rel)
+    except (ClientError, BotoCoreError) as exc:
+        raise click.ClickException(f"Listing {prefix or '/'} failed: {exc}")
 
 
 @artifact_store.command()
@@ -307,9 +323,12 @@ def url(key, expires):
     conf = _require_config()
     client = _client(conf)
     full_key = _full_key(conf, key)
-    if not _exists(client, conf.bucket, full_key):
-        raise click.ClickException(f"{key} does not exist.")
-    click.echo(_presign(client, conf, full_key, expires))
+    try:
+        if not _exists(client, conf.bucket, full_key):
+            raise click.ClickException(f"{key} does not exist.")
+        click.echo(_presign(client, conf, full_key, expires))
+    except (ClientError, BotoCoreError) as exc:
+        raise click.ClickException(f"Presigning {key} failed: {exc}")
 
 
 def _presign(client, conf: StoreConfig, full_key: str, expires: int) -> str:
