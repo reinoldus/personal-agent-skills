@@ -1,0 +1,27 @@
+[project]
+name = "agent-swizzle"
+version = "0.1.0"
+description = "Pocket knife of small CLI tools for coding agents."
+readme = "README.md"
+authors = [
+    { name = "Stefan Hesse" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.43.83",
+    "click>=8.5.0",
+    "tomli-w>=1.2.0",
+]
+
+[project.scripts]
+agent-swizzle = "agent_swizzle.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.2,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "moto>=5.2.3",
+    "pytest>=9.1.1",
+]
