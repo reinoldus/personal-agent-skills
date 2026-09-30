@@ -1,6 +1,6 @@
 ---
 name: spawn-worktree
-description: Create a git worktree with worktrunk (`wt`), open it as its own herdr workspace running a fresh coding agent, and hand a task off to it. Use when the user wants work done on a separate branch in parallel, an isolated worktree for a feature or fix, or a sibling agent started outside the current checkout.
+description: Create a git worktree with worktrunk (`wt`), open it in herdr — as a new tab in the current workspace when it belongs to the same project, otherwise as its own workspace — running a fresh coding agent, and hand a task off to it. Use when the user wants work done on a separate branch in parallel, an isolated worktree for a feature or fix, or a sibling agent started outside the current checkout.
 ---
 
 # spawn-worktree
@@ -11,7 +11,9 @@ Branch the work off into its own worktree and its own agent: name, create, attac
 
 1. **Pick the branch name.** Derive `<type>/<slug>` from the task — `feat/add-retry`, `fix/flaky-test` — and include the issue number when one exists: `feat/123-add-retry`. Done when a name is chosen; no confirmation round-trip needed.
 2. **Create the worktree.** `wt switch --create <branch>`. worktrunk runs the project's configured pre-start hooks here — dependency install, per-worktree env files, port allocation — which is the whole reason to use `wt` instead of raw git. Done when the hooks have finished and the worktree path is captured — `wt list --format json` maps each `branch` to its `path`.
-3. **Attach a workspace.** `herdr workspace create --cwd <worktree-path> --label <branch> --no-focus`. A separate workspace, rather than a split of the current pane, is what lets herdr's `branch` sidebar token tell the new work apart from everything else. Done when the reply yields both the new `workspace_id` and its `pane_id`.
+3. **Attach a tab or a workspace.** Same project means the caller is inside herdr (`$HERDR_WORKSPACE_ID` is set) and the worktree shares the caller's repo — `git -C <worktree-path> rev-parse --path-format=absolute --git-common-dir` resolves to the same directory as the caller's own. Worktrees of the project the caller is already working in stay grouped under the caller's workspace instead of cluttering the sidebar.
+   - **Same project:** `herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd <worktree-path> --label <branch> --no-focus`. Done when the reply yields the new `tab_id` and its `root_pane.pane_id`.
+   - **Different project, or not inside herdr:** `herdr workspace create --cwd <worktree-path> --label <branch> --no-focus`. Done when the reply yields both the new `workspace_id` and its `pane_id`.
 4. **Start and hand off.** `herdr agent start <name> --kind claude --pane <pane_id>`, then `herdr agent prompt <name> "<task>" --wait --until working --timeout 15000`. See the `spawn-pane` skill for the start/prompt mechanics and their failure modes. Done when the reply is `agent_prompted` with `agent_status: working`.
 5. **Collect.** Follow `spawn-pane`'s wait/read pattern — `herdr agent wait <name> --until idle --until done --until blocked`, then `herdr agent read <name>`. Done when what the agent produced, not just its finished state, is relayed back to the user.
 
@@ -23,7 +25,7 @@ How much context to hand over is the caller's call at invocation time, not fixed
 
 - **Never use `herdr worktree create`.** It looks like the obvious shortcut and it is the wrong tool: it drives raw git and skips worktrunk's pre-start hooks entirely. In any project whose worktrees need setup — virtualenv, env files, installed dependencies, allocated ports — a herdr-created worktree is a broken worktree. `wt` creates; herdr only attaches.
 - **Get the name right the first time.** Renaming a worktree after the fact means tearing it down and re-running every hook. A worktree name is expensive to change.
-- **`wt switch` only moves the shell that ran it.** A non-interactive invocation creates the worktree and runs the hooks, but leaves the calling agent where it was. Pass the captured path to `herdr workspace create --cwd` explicitly; never assume the agent's own cwd followed.
-- **Two id spaces.** `herdr agent …` subcommands target the agent *name*; `herdr pane …` and `herdr workspace …` subcommands target *ids*.
+- **`wt switch` only moves the shell that ran it.** A non-interactive invocation creates the worktree and runs the hooks, but leaves the calling agent where it was. Pass the captured path to `--cwd` of `herdr tab create` or `herdr workspace create` explicitly; never assume the agent's own cwd followed.
+- **Two id spaces.** `herdr agent …` subcommands target the agent *name*; `herdr pane …`, `herdr tab …`, and `herdr workspace …` subcommands target *ids*.
 - **Parse the JSON.** Every herdr command returns a structured reply — read the fields for the ids and the status instead of treating a zero exit code as success.
-- **Don't duplicate `spawn-pane`.** Agent start, prompt, stall recovery, and collection live there; this skill only adds the worktree and workspace in front of them.
+- **Don't duplicate `spawn-pane`.** Agent start, prompt, stall recovery, and collection live there; this skill only adds the worktree and its tab or workspace in front of them.
