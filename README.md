@@ -9,7 +9,7 @@ npx skills add reinoldus/personal-agent-skills
 ## Skills
 
 - **spawn-pane** — spawn a herdr pane running a fresh coding agent and hand a task off to it.
-- **spawn-worktree** — create a git worktree with `wt`, open it as its own herdr workspace running a fresh agent, and hand a task off to it.
+- **spawn-worktree** — create a git worktree with `wt`, open it in herdr (a tab in the current workspace for the same project, otherwise its own workspace) running a fresh agent, and hand a task off to it.
 - **artifact-store** — upload, list, download, and share files on S3-compatible storage with `agent-swizzle <project> artifact-store`; each project has its own bucket.
 
 ## CLIs
