@@ -5,7 +5,7 @@ description: Create a git worktree with worktrunk (`wt`), open it in herdr — a
 
 # spawn-worktree
 
-Branch the work off into its own worktree and its own agent: name, create, attach, hand off, collect. The invoking agent stays where it is — the new agent is a sibling, not a replacement. Every herdr command replies with JSON; parse it rather than assuming success.
+Branch the work off into its own worktree and its own agent: name, create, attach, then hand off via `spawn-pane`. The invoking agent stays where it is — the new agent is a sibling, not a replacement. Every herdr command replies with JSON; parse it rather than assuming success.
 
 ## Steps
 
@@ -14,8 +14,7 @@ Branch the work off into its own worktree and its own agent: name, create, attac
 3. **Attach a tab or a workspace.** Same project means the caller is inside herdr (`$HERDR_WORKSPACE_ID` is set) and the worktree shares the caller's repo — `git -C <worktree-path> rev-parse --path-format=absolute --git-common-dir` resolves to the same directory as the caller's own. Worktrees of the project the caller is already working in stay grouped under the caller's workspace instead of cluttering the sidebar.
    - **Same project:** `herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd <worktree-path> --label <branch> --no-focus`. Done when the reply yields the new `tab_id` and its `root_pane.pane_id`.
    - **Different project, or not inside herdr:** `herdr workspace create --cwd <worktree-path> --label <branch> --no-focus`. Done when the reply yields both the new `workspace_id` and its `pane_id`.
-4. **Start and hand off.** `herdr agent start <name> --kind claude --pane <pane_id>`, then `herdr agent prompt <name> "<task>" --wait --until working --timeout 15000`. See the `spawn-pane` skill for the start/prompt mechanics and their failure modes. Done when the reply is `agent_prompted` with `agent_status: working`.
-5. **Collect.** Follow `spawn-pane`'s wait/read pattern — `herdr agent wait <name> --until idle --until done --until blocked`, then `herdr agent read <name>`. Done when what the agent produced, not just its finished state, is relayed back to the user.
+4. **Start, hand off, collect.** Run `spawn-pane` steps 2–4 against the captured `pane_id` — start, retry, the report file, and collection all live there. Done when the agent's report, not just its finished state, is relayed back to the user.
 
 ## Context
 
@@ -28,4 +27,4 @@ How much context to hand over is the caller's call at invocation time, not fixed
 - **`wt switch` only moves the shell that ran it.** A non-interactive invocation creates the worktree and runs the hooks, but leaves the calling agent where it was. Pass the captured path to `--cwd` of `herdr tab create` or `herdr workspace create` explicitly; never assume the agent's own cwd followed.
 - **Two id spaces.** `herdr agent …` subcommands target the agent *name*; `herdr pane …`, `herdr tab …`, and `herdr workspace …` subcommands target *ids*.
 - **Parse the JSON.** Every herdr command returns a structured reply — read the fields for the ids and the status instead of treating a zero exit code as success.
-- **Don't duplicate `spawn-pane`.** Agent start, prompt, stall recovery, and collection live there; this skill only adds the worktree and its tab or workspace in front of them.
+- **Don't duplicate `spawn-pane`.** Agent start, busy-pane and stall recovery, the report file, and collection live there; this skill only adds the worktree and its tab or workspace in front of them.
