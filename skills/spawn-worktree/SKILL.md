@@ -10,7 +10,7 @@ Branch the work off into its own worktree and its own agent: name, create, attac
 ## Steps
 
 1. **Pick the branch name.** Derive `<type>/<slug>` from the task — `feat/add-retry`, `fix/flaky-test` — and include the issue number when one exists: `feat/123-add-retry`. Done when a name is chosen; no confirmation round-trip needed.
-2. **Create the worktree.** `wt switch --create <branch>`. worktrunk runs the project's configured pre-start hooks here — dependency install, per-worktree env files, port allocation — which is the whole reason to use `wt` instead of raw git. Done when the hooks have finished and the worktree path is captured — `wt list --format json` maps each `branch` to its `path`.
+2. **Create the worktree.** `git fetch origin`, then `wt switch --create <branch> --base origin/<default-branch> --no-cd` (or `--base origin/<parent-branch>` for a stacked PR). Without `--base`, `wt` branches from the *local* default branch, which lags `origin` in a long-lived checkout. worktrunk runs the project's configured pre-start hooks here — dependency install, per-worktree env files, port allocation — which is the whole reason to use `wt` instead of raw git. Done when the hooks have finished and the worktree path is captured — `wt list --format json` maps each `branch` to its `path`.
 3. **Attach a tab or a workspace.** Same project means the caller is inside herdr (`$HERDR_WORKSPACE_ID` is set) and the worktree shares the caller's repo — `git -C <worktree-path> rev-parse --path-format=absolute --git-common-dir` resolves to the same directory as the caller's own. Worktrees of the project the caller is already working in stay grouped under the caller's workspace instead of cluttering the sidebar.
    - **Same project:** `herdr tab create --workspace "$HERDR_WORKSPACE_ID" --cwd <worktree-path> --label <branch> --no-focus`. Done when the reply yields the new `tab_id` and its `root_pane.pane_id`.
    - **Different project, or not inside herdr:** `herdr workspace create --cwd <worktree-path> --label <branch> --no-focus`. Done when the reply yields both the new `workspace_id` and its `pane_id`.
@@ -18,7 +18,7 @@ Branch the work off into its own worktree and its own agent: name, create, attac
 
 ## Context
 
-How much context to hand over is the caller's call at invocation time, not fixed here. Default is self-contained but minimal: the repo, the worktree path, the branch, the task, the deliverable, and whether the agent may modify code. Never paste a raw transcript — the new agent inherits the old one's dead ends along with its findings.
+How much context to hand over is the caller's call at invocation time, not fixed here. Default is self-contained but minimal: the repo, the worktree path, the branch, the task, the deliverable, and whether the agent may modify code. A task that ends in a PR starts the prompt with the repo's own end-to-end skill when it has one (`/afk-implement` in WIMJ). Otherwise it ends with a code-review loop before the PR opens: run `/mattpocock-skills:code-review`, fix the blocking findings, and run it again until a pass has no blocking findings; list the rest in the PR body. An agent left to its own devices skips the review. Never paste a raw transcript — the new agent inherits the old one's dead ends along with its findings.
 
 ## Traps
 
