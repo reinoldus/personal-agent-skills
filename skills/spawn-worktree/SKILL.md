@@ -18,7 +18,7 @@ Branch the work off into its own worktree and its own agent: name, create, attac
 
 ## Context
 
-How much context to hand over is the caller's call at invocation time, not fixed here. Default is self-contained but minimal: the repo, the worktree path, the branch, the task, the deliverable, and whether the agent may modify code. A task that ends in a PR starts the prompt with the repo's own end-to-end skill when it has one (`/afk-implement` in WIMJ). Otherwise it ends with a code-review loop before the PR opens: run `/mattpocock-skills:code-review`, fix the blocking findings, and run it again until a pass has no blocking findings; list the rest in the PR body. An agent left to its own devices skips the review. Never paste a raw transcript — the new agent inherits the old one's dead ends along with its findings.
+How much context to hand over is the caller's call at invocation time, not fixed here. Default is self-contained but minimal: the repo, the worktree path, the branch, the task, the deliverable, and whether the agent may modify code. A task that ends in a PR starts the prompt with the repo's own end-to-end skill when it has one (`/afk-implement` in WIMJ). Otherwise it ends with a code-review loop before the PR opens: run `/mattpocock-skills:code-review`, fix the blocking findings, and run it again until a pass has no blocking findings; list the rest in the PR body. An agent left to its own devices skips the review. A multi-PR rollout gets one agent per PR, each based on the previous PR's branch, started once the prior PR is up; one agent for a whole stack runs out of context. Never paste a raw transcript — the new agent inherits the old one's dead ends along with its findings.
 
 ## Traps
 
